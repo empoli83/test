@@ -1,0 +1,96 @@
+  METHOD /iwbep/if_mgw_appl_srv_runtime~get_stream.
+**TRY.
+*CALL METHOD SUPER->/IWBEP/IF_MGW_APPL_SRV_RUNTIME~GET_STREAM
+**  EXPORTING
+**    iv_entity_name          =
+**    iv_entity_set_name      =
+**    iv_source_name          =
+**    it_key_tab              =
+**    it_navigation_path      =
+**    io_tech_request_context =
+**  IMPORTING
+**    er_stream               =
+**    es_response_context     =
+*    .
+** CATCH /iwbep/cx_mgw_busi_exception .
+** CATCH /iwbep/cx_mgw_tech_exception .
+**ENDTRY.
+
+    DATA : lv_file_stream TYPE xstring,
+           lv_mime_type   TYPE w3conttype,
+           lv_filename    TYPE string,
+           lv_wi_id       TYPE sww_wiid,
+           ls_stream      TYPE ty_s_media_resource,
+           lt_container   TYPE TABLE OF swcont,
+           ls_lheader     TYPE ihttpnvp,
+           lv_entity_name TYPE /iwbep/mgw_tech_name.
+
+    lv_entity_name      = io_tech_request_context->get_entity_type_name( ).
+
+    CASE iv_entity_name.
+      WHEN 'AddressDocument'.
+
+        READ TABLE it_key_tab INTO DATA(ls_keyvalue) INDEX 1 .
+        IF sy-subrc EQ 0.
+          lv_wi_id  = ls_keyvalue-value .
+        ENDIF.
+
+        CHECK NOT lv_wi_id IS INITIAL.
+
+        SELECT SINGLE parent_wi
+              INTO @DATA(lv_parentwi)
+              FROM swwwihead
+             WHERE wi_id EQ @lv_wi_id.
+        IF sy-subrc IS INITIAL.
+
+          CALL FUNCTION 'SWW_WI_CONTAINER_READ'
+            EXPORTING
+              wi_id        = lv_parentwi
+            TABLES
+              wi_container = lt_container.
+
+          READ TABLE lt_container INTO DATA(ls_container) WITH KEY element = 'IV_TALEPNO'.
+          IF sy-subrc EQ 0.
+            DATA(lv_talepno) = ls_container-value.
+
+            IF NOT lv_talepno IS INITIAL.
+
+              SELECT *
+                INTO TABLE @DATA(lt_t0039)
+                FROM zhr_vkt_t0039
+               WHERE talep_no EQ @lv_talepno.
+
+
+              LOOP AT lt_t0039 INTO DATA(ls_t0039).
+
+*                lv_filename = escape( val = ls_t0039-filename format = cl_abap_format=>e_url ).
+*                ls_lheader-name = 'Content-Disposition'.
+**                lv_filename = ls_doc_data-obj_descr.
+*                CONCATENATE 'inline; filename=' lv_filename INTO ls_lheader-value.
+
+                CONCATENATE 'attachment; filename=' ls_t0039-filename
+                       INTO ls_lheader-value.
+
+                CONCATENATE 'inline; filename=' ls_t0039-filename INTO ls_lheader-value.
+                ls_lheader-name = 'content-disposition'.
+
+                set_header( is_header = ls_lheader ).
+
+                ls_stream-value     = ls_t0039-xfile.
+                ls_stream-mime_type = ls_t0039-mime_type.
+
+                /iwbep/if_mgw_conv_srv_runtime~set_header( ls_lheader ).
+
+                copy_data_to_ref( EXPORTING is_data = ls_stream
+                                  CHANGING  cr_data = er_stream ).
+
+
+              ENDLOOP.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+    ENDCASE.
+
+
+  ENDMETHOD.

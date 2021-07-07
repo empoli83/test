@@ -1,0 +1,88 @@
+  METHOD /iwbep/if_mgw_appl_srv_runtime~create_stream.
+
+    DATA: ls_key_tab TYPE /iwbep/s_mgw_name_value_pair,
+          lv_fl_nm   TYPE string,
+          lv_pernr   TYPE persno.
+
+    DATA ls_data TYPE zhr_vkt_t0039.
+    DATA ls_28 TYPE zhr_vkt_t0028.
+
+
+    CASE iv_entity_name.
+      WHEN 'AddressDocument'.
+
+        SELECT SINGLE pernr FROM pa0105 INTO lv_pernr
+        WHERE subty = '0001' AND
+              endda GE sy-datum AND
+              begda LE sy-datum AND
+              usrid = sy-uname.
+
+        SELECT * FROM zhr_vkt_t0028
+          WHERE pernr = @lv_pernr
+          ORDER BY talep_no DESCENDING
+          INTO @ls_28.
+          EXIT.
+        ENDSELECT.
+
+        lv_fl_nm =  cl_http_utility=>unescape_url( iv_slug ).
+        REPLACE ALL OCCURRENCES OF '#' IN lv_fl_nm WITH space.
+
+        "DELETE FROM zhr_vkt_t0039 WHERE talep_no = ls_28-talep_no.
+
+        CLEAR ls_data.
+        ls_data-talep_no  = ls_28-talep_no.
+        ls_data-pernr     = lv_pernr.
+        ls_data-filename  = lv_fl_nm.
+        ls_data-xfile     = is_media_resource-value.
+        ls_data-mime_type = is_media_resource-mime_type.
+
+        MODIFY zhr_vkt_t0039 FROM ls_data.
+
+
+
+*        select single pernr from pa0105 into lv_pernr
+*        where subty = '0001' and
+*              endda ge sy-datum and
+*              begda le sy-datum and
+*              usrid = sy-uname.
+*
+*        if sy-subrc ne 0.
+*          raise exception type /iwbep/cx_mgw_busi_exception
+*            exporting
+*              textid            = /iwbep/cx_mgw_busi_exception=>business_error_unlimited
+*              message_unlimited = 'Dosya yüklenmesi sýrasýnda hata (Personel Numarasý).'.
+*        endif.
+*
+*        lv_fl_nm =  cl_http_utility=>unescape_url( iv_slug ).
+*        replace all occurrences of '#' in lv_fl_nm with space.
+*
+*        try .
+*            data: ls_lporb type sibflporb.
+*
+*            ls_lporb-instid = lv_pernr .
+*            ls_lporb-typeid = 'BUS1065' .
+*
+*            cl_fitv_gos=>save(
+*              exporting
+*                is_lporb = ls_lporb
+*                iv_content_hex = is_media_resource-value
+*                iv_name = lv_fl_nm
+*                iv_objtp = 'EXT'
+*                iv_commit_on = 'X'
+*              receiving
+*                rt_messages = data(ls_msg)
+*             ) .
+*
+*
+*          catch cx_root .
+*            raise exception type /iwbep/cx_mgw_busi_exception
+*              exporting
+*                textid            = /iwbep/cx_mgw_busi_exception=>business_error_unlimited
+*                message_unlimited = 'hata...'.
+*
+*        endtry.
+
+    ENDCASE.
+
+
+  ENDMETHOD.
